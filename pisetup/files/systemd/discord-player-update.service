@@ -1,0 +1,12 @@
+[Unit]
+Description=Update the Discord music player to the newest image
+Wants=network-online.target
+After=network-online.target docker.service
+ConditionFileNotEmpty=/opt/discord-player/secrets/discord_token
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/discord-player
+ExecStart=/usr/bin/docker compose pull --quiet
+ExecStart=/usr/bin/docker compose up -d --remove-orphans
+ExecStartPost=/usr/bin/docker image prune -f

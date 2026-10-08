@@ -1,0 +1,25 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # Raspberry Pi OS Bookworm ships Python 3.11: the setup must run on it.
+          python-version: "3.11"
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pytest -q
+      - name: compose config
+        run: |
+          tmp="$(mktemp -d)"
+          cp pisetup/files/docker-compose.yml "$tmp/"
+          cp pisetup/files/.env.example "$tmp/.env"
+          mkdir "$tmp/secrets" && : > "$tmp/secrets/discord_token"
+          docker compose --project-directory "$tmp" -f "$tmp/docker-compose.yml" config -q

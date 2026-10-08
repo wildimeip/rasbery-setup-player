@@ -1,0 +1,27 @@
+[project]
+name = "rasbery-setup-player"
+version = "0.1.0"
+description = "Prepares a Raspberry Pi for the Discord music player (rasbery-discord-player)"
+# Runs with the Python that ships with Raspberry Pi OS: standard library only.
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.setuptools.packages.find]
+include = ["pisetup*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

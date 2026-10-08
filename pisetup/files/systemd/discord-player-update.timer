@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly update check for the Discord music player
+
+[Timer]
+OnCalendar=*-*-* 04:45
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
