@@ -9,6 +9,25 @@ from .system import System
 
 CONTAINER = "discord-player"
 
+# vcgencmd get_throttled bits: the low ones are "now", the 0x10000+ ones "since boot".
+THROTTLE_NOW = {0x1: "under-voltage", 0x2: "CPU speed capped", 0x4: "throttled", 0x8: "too hot"}
+THROTTLE_PAST = {0x10000: "under-voltage", 0x20000: "CPU speed capped", 0x40000: "throttling"}
+THROTTLE_PAST[0x80000] = "overheating"
+
+# Known reasons the player exits at start, and what fixes them.
+KNOWN_ERRORS = {
+    "Message Content Intent": (
+        "Discord: turn on Message Content Intent (Developer Portal -> your app -> Bot -> "
+        "Privileged Gateway Intents), save, then: sudo systemctl restart discord-player"
+    ),
+    "rejected the bot token": (
+        f"put the right token in {APP_DIR}/secrets/discord_token (sudo nano), "
+        "then: sudo systemctl restart discord-player"
+    ),
+    "No Discord bot token": f"sudo nano {APP_DIR}/secrets/discord_token",
+    "Configuration error": f"fix the value named above in {APP_DIR}/.env",
+}
+
 
 class Report:
     def __init__(self) -> None:
@@ -38,14 +57,7 @@ def check(sys: System) -> int:
         r.info(f"{mem} MB memory")
     throttled = sys.run("vcgencmd", "get_throttled", capture=True, check=False)
     if throttled.ok:
-        value = throttled.stdout.strip().partition("=")[2]
-        if value in ("0x0", ""):
-            r.ok("power supply is fine (not throttled)")
-        else:
-            r.bad(
-                f"under-voltage or throttling reported ({value})",
-                "use a 5.1 V / 2.5 A supply and a short, thick cable",
-            )
+        _check_power(r, throttled.stdout.strip().partition("=")[2])
 
     print("Docker")
     if sys.run("docker", "info", capture=True, check=False).ok:
@@ -93,25 +105,55 @@ def check(sys: System) -> int:
         "docker",
         "inspect",
         "-f",
-        "{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}",
+        "{{.State.Status}} {{.RestartCount}} {{if .State.Health}}{{.State.Health.Status}}{{end}}",
         CONTAINER,
         capture=True,
         check=False,
     )
-    status = state.stdout.split() if state.ok else []
-    if not status:
+    fields = state.stdout.split() if state.ok else []
+    if not fields:
         r.bad("the player is not started", f"cd {APP_DIR} && docker compose up -d")
-    elif status[0] != "running":
-        r.bad(f"the player is {status[0]}", f"cd {APP_DIR} && docker compose logs --tail 50")
-    elif len(status) > 1 and status[1] == "unhealthy":
-        r.bad("the player is running but not connected", f"cd {APP_DIR} && docker compose logs")
+        return _done(r)
+    status = fields[0]
+    restarts = int(fields[1]) if len(fields) > 1 and fields[1].isdigit() else 0
+    health = fields[2] if len(fields) > 2 else ""
+    logs = sys.run("docker", "logs", "--tail", "40", CONTAINER, capture=True, check=False).stdout
+    known = next((fix for text, fix in KNOWN_ERRORS.items() if text in logs), None)
+    logs_hint = f"cd {APP_DIR} && docker compose logs --tail 50"
+    if status == "restarting" or restarts >= 3:
+        r.bad(f"the player keeps restarting ({restarts} restarts)", known or logs_hint)
+    elif status != "running":
+        r.bad(f"the player is {status}", known or logs_hint)
+    elif health == "unhealthy":
+        r.bad("the player is running but not connected to Discord", known or logs_hint)
+    elif health == "starting":
+        r.info("the player is starting (run doctor again in a minute)")
     else:
-        r.ok(f"the player is {' / '.join(status)}")
-    if status:
-        logs = sys.run("docker", "logs", "--tail", "8", CONTAINER, capture=True, check=False)
-        for line in logs.stdout.splitlines():
-            r.info(f"log: {line}")
+        r.ok(f"the player is running{f' / {health}' if health else ''}")
+    for line in logs.splitlines()[-8:]:
+        r.info(f"log: {line}")
     return _done(r)
+
+
+def _check_power(r: Report, value: str) -> None:
+    try:
+        bits = int(value, 16)
+    except ValueError:
+        return
+    now = [name for bit, name in THROTTLE_NOW.items() if bits & bit]
+    past = [name for bit, name in THROTTLE_PAST.items() if bits & bit]
+    if now:
+        r.bad(
+            f"{', '.join(now)} right now ({value})",
+            "use a 5.1 V / 2.5 A supply and a short, thick cable (and some airflow)",
+        )
+    elif past:
+        r.info(
+            f"{', '.join(past)} happened since boot ({value}), fine now. If it keeps "
+            "happening during normal use, get a better power supply."
+        )
+    else:
+        r.ok("power supply is fine")
 
 
 def _done(r: Report) -> int:
