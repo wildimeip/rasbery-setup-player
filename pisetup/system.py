@@ -36,6 +36,8 @@ def run_for_real(cmd: Sequence[str], opts: dict) -> Result:
             env=env,
             text=True,
             stdout=subprocess.PIPE if opts.get("capture") else None,
+            # Captured output includes errors (docker logs writes the app's stderr there).
+            stderr=subprocess.STDOUT if opts.get("capture") else None,
             input=opts.get("input"),
         )
     except FileNotFoundError:
