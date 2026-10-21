@@ -76,6 +76,7 @@ read packages.
 | `--audio auto\|jack\|hdmi\|usb` | sound output (default `auto`: USB card, else jack) |
 | `--channel music` or `--channel 1234,5678` | channel name, or channel id(s), to listen in |
 | `--volume 70` | start volume, 0-130 |
+| `--youtube-cookies cookies.txt` | sign in to YouTube with a spare account (see below) |
 | `--token-stdin` | read the token from stdin: `echo "$TOKEN" \| sudo python3 -m pisetup --token-stdin` |
 | `--no-upgrade` | skip the slow apt upgrade (quick re-run) |
 | `--no-start` | install, but don't start the player |
@@ -83,6 +84,33 @@ read packages.
 Run it again any time, e.g. after a `git pull` or to switch the output to a USB sound card:
 `sudo python3 -m pisetup --no-upgrade --audio usb`. Your settings, token and song history are
 kept; only the options you pass change.
+
+### If YouTube asks to confirm the Pi isn't a bot
+
+After many downloads YouTube may flag your internet address ("Sign in to confirm you're not a
+bot"). The setup also runs a small second container, `pot-provider`, that makes the player's
+requests look like a browser's, which helps. When YouTube still refuses, the player leaves it
+alone for 30 minutes and plays songs from SoundCloud meanwhile (no account needed). On a home
+connection the block usually clears within hours or a few days.
+
+If it keeps coming back, let the player sign in with the cookies of a **spare** Google account.
+YouTube can ban accounts used this way, so never use your own.
+
+1. On your computer, open a **private/incognito** browser window, sign in to youtube.com with
+   the spare account and play any video.
+2. In that window, export the cookies with a cookies.txt extension (e.g. *Get cookies.txt
+   LOCALLY*) as `cookies.txt`, then close the window without signing out (signing out makes
+   the cookies useless).
+3. Copy it to the Pi and install it (the player restarts and signs in with it):
+   ```sh
+   scp cookies.txt <username>@musicpi.local:~
+   cd ~/rasbery-setup-player && sudo python3 -m pisetup --no-upgrade --youtube-cookies ~/cookies.txt
+   rm ~/cookies.txt
+   ```
+
+The cookies are stored like the bot token, in `/opt/discord-player/secrets/youtube_cookies`
+(readable only by the player). They stop working after some weeks or months; repeat the steps
+then. To sign out again, empty that file and restart the player.
 
 ### Other commands
 
@@ -97,6 +125,7 @@ sudo python3 -m pisetup test-sound  # "front left, front right" on the configure
 | --- | --- |
 | `/opt/discord-player/.env` | settings (channel, sound output, volume, random mode, ...), explained in `.env.example` next to it |
 | `/opt/discord-player/secrets/discord_token` | the bot token (readable only by the player), passed to it as a Docker secret |
+| `/opt/discord-player/secrets/youtube_cookies` | optional YouTube sign-in (empty = not signed in), also a Docker secret |
 | `/opt/discord-player/data/` | song history (the pool random mode picks from) |
 | `discord-player.service` | starts the player at boot: `sudo systemctl restart discord-player` |
 | `discord-player-update.timer` | nightly update at ~04:45 |

@@ -12,6 +12,9 @@ APP_UID = 1000  # the user the app runs as inside the container
 FILES = Path(__file__).parent / "files"
 UNITS = ("discord-player.service", "discord-player-update.service", "discord-player-update.timer")
 TOKEN = f"{APP_DIR}/secrets/discord_token"
+# Optional: cookies of a spare YouTube account, for when YouTube asks to confirm the Pi isn't a
+# bot. Always exists (Docker needs the file); empty means "not signed in".
+COOKIES = f"{APP_DIR}/secrets/youtube_cookies"
 
 
 def set_env(text: str, key: str, value: str) -> str:
@@ -42,9 +45,10 @@ def install_files(sys: System, user: str, settings: dict[str, str]) -> bool:
     sys.write(env_path, text, mode=0o600)
     sys.mkdir(f"{APP_DIR}/data")
     sys.mkdir(f"{APP_DIR}/secrets", mode=0o700)
-    if not sys.exists(TOKEN):
-        sys.write(TOKEN, "")
-    sys.path(TOKEN).chmod(0o600)
+    for secret in (TOKEN, COOKIES):
+        if not sys.exists(secret):
+            sys.write(secret, "")
+        sys.path(secret).chmod(0o600)
     sys.chown(f"{user}:", APP_DIR, env_path)
     sys.chown(f"{APP_UID}:{APP_UID}", f"{APP_DIR}/data")
     sys.chown(f"{APP_UID}:{APP_UID}", f"{APP_DIR}/secrets", recursive=True)
@@ -58,6 +62,18 @@ def has_token(sys: System) -> bool:
 def save_token(sys: System, token: str) -> None:
     sys.write(TOKEN, token.strip() + "\n", mode=0o600)
     sys.chown(f"{APP_UID}:{APP_UID}", TOKEN)
+
+
+def has_cookies(sys: System) -> bool:
+    return bool(sys.read(COOKIES).strip())
+
+
+def save_cookies(sys: System, text: str) -> None:
+    """Saves an exported cookies.txt (Netscape format) for the player's yt-dlp."""
+    if "youtube.com" not in text or "\t" not in text:
+        raise ValueError("this doesn't look like YouTube cookies in cookies.txt (Netscape) format")
+    sys.write(COOKIES, text if text.endswith("\n") else text + "\n", mode=0o600)
+    sys.chown(f"{APP_UID}:{APP_UID}", COOKIES)
 
 
 def install_units(sys: System) -> None:

@@ -11,6 +11,7 @@ import argparse
 import getpass
 import os
 import sys as _sys
+from pathlib import Path
 
 from . import audio, doctor, player, prepare
 from .system import CommandFailed, System
@@ -36,6 +37,11 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--channel", help="Discord channel name (music) or channel id(s): 123,456")
     p.add_argument("--volume", type=int, choices=range(0, 131), metavar="0-130")
     p.add_argument("--token-stdin", action="store_true", help="read the bot token from stdin")
+    p.add_argument(
+        "--youtube-cookies",
+        metavar="FILE",
+        help="cookies.txt of a spare YouTube account, if YouTube asks to confirm it's not a bot",
+    )
     p.add_argument("--no-start", action="store_true", help="install, but don't start the player")
     return p.parse_args(argv)
 
@@ -108,6 +114,13 @@ def install(args: argparse.Namespace, sys: System, user: str) -> int:
         token = getpass.getpass("Paste the Discord bot token (input hidden, Enter to skip): ")
         if token.strip():
             player.save_token(sys, token)
+    if args.youtube_cookies:
+        try:
+            player.save_cookies(sys, Path(args.youtube_cookies).read_text())
+        except (OSError, ValueError) as e:
+            print(f"YouTube cookies not saved: {e}", file=_sys.stderr)
+            return 1
+        print("YouTube cookies saved; the player signs in with them.")
     player.install_units(sys)
 
     started = False
