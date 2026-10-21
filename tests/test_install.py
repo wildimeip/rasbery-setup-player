@@ -35,6 +35,9 @@ def test_fresh_install(pi, runner, capsys):
     assert "AUDIO_GID=29" in env
     assert oct((r / APP / ".env").stat().st_mode)[-3:] == "600"
     assert oct((r / APP / "secrets/discord_token").stat().st_mode)[-3:] == "600"
+    # Docker needs the cookies secret to exist; empty = not signed in.
+    assert (r / APP / "secrets/youtube_cookies").read_text() == ""
+    assert oct((r / APP / "secrets/youtube_cookies").stat().st_mode)[-3:] == "600"
     assert oct((r / APP / "secrets").stat().st_mode)[-3:] == "700"
     config = (r / "boot/firmware/config.txt").read_text()
     assert config == "dtparam=i2c_arm=on\ndtparam=audio=on\n"
@@ -133,3 +136,19 @@ def test_failed_command_stops_setup(pi, runner, capsys):
 def _rerun_output(pi, capsys):
     main(["--no-upgrade"], pi)
     return capsys.readouterr().out
+
+
+def test_youtube_cookies(pi, runner, tmp_path, capsys):
+    cookies = tmp_path / "cookies.txt"
+    cookies.write_text("# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\tabc\n")
+    assert main(["--no-upgrade", "--youtube-cookies", str(cookies)], pi) == 0
+    saved = pi.root / APP / "secrets/youtube_cookies"
+    assert saved.read_text() == cookies.read_text()
+    assert oct(saved.stat().st_mode)[-3:] == "600"
+    assert main(["--no-upgrade"], pi) == 0  # a re-run keeps them
+    assert saved.read_text() == cookies.read_text()
+
+    cookies.write_text("not cookies")
+    assert main(["--no-upgrade", "--youtube-cookies", str(cookies)], pi) == 1
+    assert "doesn't look like YouTube cookies" in capsys.readouterr().err
+    assert main(["--no-upgrade", "--youtube-cookies", str(tmp_path / "missing")], pi) == 1
