@@ -87,9 +87,11 @@ kept; only the options you pass change.
 
 ### If YouTube asks to confirm the Pi isn't a bot
 
-After many downloads YouTube may flag your internet address, and the player says in Discord
-that YouTube wants it to prove it isn't a bot. It then waits 30 minutes and tries again by
-itself; on a home connection the block usually clears within hours or a few days.
+After many downloads YouTube may flag your internet address ("Sign in to confirm you're not a
+bot"). The setup also runs a small second container, `pot-provider`, that makes the player's
+requests look like a browser's, which helps. When YouTube still refuses, the player leaves it
+alone for 30 minutes and plays songs from SoundCloud meanwhile (no account needed). On a home
+connection the block usually clears within hours or a few days.
 
 If it keeps coming back, let the player sign in with the cookies of a **spare** Google account.
 YouTube can ban accounts used this way, so never use your own.
